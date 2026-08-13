@@ -1,0 +1,2 @@
+Method,Modalities,Model,Participants,C,Accuracy,Recall,Precision,F1-score,Non-depressed_F1,Macro_F1,TN,FP,FN,TP
+Feature-level fusion,10 transcript + 50 selected eGeMAPS,Linear SVM,132,0.01,0.6439393939393939,0.6060606060606061,0.6557377049180327,0.6299212598425197,0.656934306569343,0.6434277832059314,45,21,26,40
