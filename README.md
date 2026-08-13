@@ -47,6 +47,26 @@ Held-out test set, 56 participants:
 
 ---
 
+## Text pipeline
+
+Ten transcript features are extracted for each participant: average sentiment,
+speech speed, unique-word frequency, stop-word frequency, average characters,
+noun, verb, adjective and adverb frequencies, and first-person pronoun
+frequency. A linear SVM (`C=0.01`) is evaluated with LOSO on the balanced
+66/66 participant set.
+
+Result: **58.33% accuracy, 0.636 depressed F1, 0.575 macro F1**.
+
+## Audio pipeline
+
+Participant-level high-level statistics are calculated from openSMILE eGeMAPS
+frames. SelectKBest (`k=50`) is fitted inside each LOSO training fold, followed
+by a linear SVM (`C=0.1`) on the same balanced participant set.
+
+Result: **63.64% accuracy, 0.642 depressed F1, 0.636 macro F1**.
+
+---
+
 ## Class distribution
 
 | Split | Total | Depressed | Not depressed |
@@ -81,6 +101,11 @@ See [`data/README.md`](data/README.md) for the expected layout.
 python video/pool_features.py     # ~275 archives, slow on first run
 python video/merge_labels.py
 python video/train_logreg.py
+
+# Final balanced text and audio systems
+python -m nltk.downloader punkt punkt_tab stopwords averaged_perceptron_tagger_eng
+python text/edaic_nlp_system.py
+python audio/edaic_audio_system.py
 ```
 
 Generated feature tables are written to `data/processed/` (git-ignored, since
