@@ -65,14 +65,6 @@ by a linear SVM (`C=0.1`) on the same balanced participant set.
 
 Result: **63.64% accuracy, 0.642 depressed F1, 0.636 macro F1**.
 
-## Text-audio early fusion
-
-The early-fusion pipeline joins all 10 transcript features with 50 eGeMAPS
-features selected inside each LOSO training fold. The combined features are
-standardized and classified using a linear SVM (`C=0.01`).
-
-Result: **64.39% accuracy, 0.630 depressed F1, 0.643 macro F1**.
-
 ---
 
 ## Class distribution
@@ -114,7 +106,6 @@ python video/train_logreg.py
 python -m nltk.downloader punkt punkt_tab stopwords averaged_perceptron_tagger_eng
 python text/edaic_nlp_system.py
 python audio/edaic_audio_system.py
-python "fusion/text-audio early fusion.py"
 ```
 
 Generated feature tables are written to `data/processed/` (git-ignored, since

@@ -50,13 +50,12 @@ selected_features_file = os.path.join(
     fusion_output_folder,
     "text_audio_fusion_selected_audio_features.csv",
 )
-results_folder = os.path.join(repository_folder, "results")
 evaluation_file = os.path.join(
-    results_folder,
+    fusion_output_folder,
     "text_audio_fusion_evaluation.csv",
 )
 comparison_file = os.path.join(
-    results_folder,
+    fusion_output_folder,
     "text_audio_fusion_comparison.csv",
 )
 
@@ -300,7 +299,6 @@ def run_fusion():
     predictions = np.asarray(predictions, dtype=int)
     scores = calculate_scores(y_values, predictions)
     os.makedirs(fusion_output_folder, exist_ok=True)
-    os.makedirs(results_folder, exist_ok=True)
     pd.DataFrame(
         {
             "Participant_ID": participant_ids,
