@@ -1,0 +1,24 @@
+# ---------------------------------------------------------------------------
+# Dataset — E-DAIC-WoZ is released under a data use agreement and must NOT be
+# redistributed. Raw archives and every derived table containing participant
+# IDs or PHQ-8 scores stay out of version control.
+# ---------------------------------------------------------------------------
+data/raw/
+data/processed/
+*.tar.gz
+*.pkl
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
