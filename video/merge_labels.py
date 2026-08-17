@@ -19,6 +19,11 @@ from config import RAW_DIR, PROCESSED_DIR, ensure_dirs  # noqa: E402
 POOLED_CSV = PROCESSED_DIR / "au_pooled_features_all_participants.csv"
 LABEL_COLS = ["Participant_ID", "Gender", "PHQ_Binary", "PHQ_Score"]
 DROP_COLS = ["PCL-C (PTSD)", "PTSD Severity"]   # unrelated labels in the split files
+SPLIT_FILES = {
+    "train": ["train_split.csv", "Train Split Data.csv"],
+    "dev": ["dev_split.csv", "Dev Split Data.csv"],
+    "test": ["test_split.csv", "Test Split Data.csv"],
+}
 
 
 def merge_and_report(split_df, features, name):
@@ -49,10 +54,15 @@ def main():
     features = pd.read_csv(POOLED_CSV)
     features["Participant_ID"] = features["Participant_ID"].astype(int)
 
-    for name in ("train", "dev", "test"):
-        split_path = RAW_DIR / f"{name}_split.csv"
-        if not split_path.exists():
-            sys.exit(f"{split_path} not found. Set EDAIC_RAW_DIR (see README).")
+    for name, file_names in SPLIT_FILES.items():
+        split_path = next(
+            (RAW_DIR / file_name for file_name in file_names
+             if (RAW_DIR / file_name).is_file()),
+            None,
+        )
+        if split_path is None:
+            tried = ", ".join(file_names)
+            sys.exit(f"No {name} label file found in {RAW_DIR}. Tried: {tried}")
         out = merge_and_report(pd.read_csv(split_path), features, name)
         out_path = PROCESSED_DIR / f"au_features_{name}.csv"
         out.to_csv(out_path, index=False)

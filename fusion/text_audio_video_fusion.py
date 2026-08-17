@@ -31,6 +31,19 @@ data_folder = os.path.join(repository_folder, "data")
 processed_folder = os.path.join(data_folder, "processed")
 audio_folder = os.path.join(processed_folder, "audio")
 output_folder = os.path.join(processed_folder, "fusion")
+company_dataset_folder = os.path.join(
+    os.path.expanduser("~"),
+    "Desktop",
+    "depression project",
+    "Dataset",
+    "Depression Dataset",
+)
+local_dataset_folder = os.path.join(data_folder, "raw")
+default_dataset_folder = (
+    company_dataset_folder
+    if os.path.isdir(company_dataset_folder)
+    else local_dataset_folder
+)
 
 balanced_split_file = os.path.join(data_folder, "EDAIC_balanced_66_66_split.csv")
 text_features_file = os.path.join(processed_folder, "edaic_nlp_features.csv")
@@ -39,15 +52,11 @@ video_119_file = os.path.join(
 )
 video_217_file = os.environ.get(
     "EDAIC_VIDEO_217",
-    os.path.join(
-        r"D:\Downloads\lightweight-depression-detection-3d-landmarks-main",
-        "analysis_handover",
-        "au_pose_gaze_features_combined_275.csv",
-    ),
+    os.path.join(processed_folder, "au_pose_gaze_features_combined_275.csv"),
 )
 edaic_raw_folder = os.environ.get(
     "EDAIC_RAW_DIR",
-    r"D:\Downloads\Depression_Anxiety_Body_Movement\data\raw\e-daic-woz",
+    os.environ.get("EDAIC_DATASET_PATH", default_dataset_folder),
 )
 audio_cache_file = os.path.join(audio_folder, "edaic_egemaps_pooled_features.csv")
 audio_features_file = os.environ.get("EDAIC_AUDIO_FEATURES", audio_cache_file)

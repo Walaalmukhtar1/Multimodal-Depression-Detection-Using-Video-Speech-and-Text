@@ -37,11 +37,7 @@ video_119_file = os.path.join(
 )
 video_217_file = os.environ.get(
     "EDAIC_VIDEO_217",
-    os.path.join(
-        r"D:\Downloads\lightweight-depression-detection-3d-landmarks-main",
-        "analysis_handover",
-        "au_pose_gaze_features_combined_275.csv",
-    ),
+    os.path.join(processed_folder, "au_pose_gaze_features_combined_275.csv"),
 )
 
 model_choice = os.environ.get("EDAIC_FUSION_MODEL", "logreg").lower()

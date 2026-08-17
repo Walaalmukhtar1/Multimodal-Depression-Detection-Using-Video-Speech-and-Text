@@ -9,10 +9,28 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
+# Dataset location on the company device.
+COMPANY_DATASET_DIR = (
+    Path.home()
+    / "Desktop"
+    / "depression project"
+    / "Dataset"
+    / "Depression Dataset"
+)
+LOCAL_DATASET_DIR = PROJECT_ROOT / "data" / "raw"
+DEFAULT_RAW_DIR = (
+    COMPANY_DATASET_DIR if COMPANY_DATASET_DIR.is_dir() else LOCAL_DATASET_DIR
+)
+
 # Directory holding the E-DAIC-WoZ release:
 #   <RAW_DIR>/300_P.tar.gz, 301_P.tar.gz, ...
 #   <RAW_DIR>/train_split.csv, dev_split.csv, test_split.csv
-RAW_DIR = Path(os.environ.get("EDAIC_RAW_DIR", PROJECT_ROOT / "data" / "raw"))
+RAW_DIR = Path(
+    os.environ.get(
+        "EDAIC_RAW_DIR",
+        os.environ.get("EDAIC_DATASET_PATH", DEFAULT_RAW_DIR),
+    )
+).expanduser()
 
 # Generated feature tables land here (git-ignored).
 PROCESSED_DIR = Path(os.environ.get("EDAIC_PROCESSED_DIR", PROJECT_ROOT / "data" / "processed"))

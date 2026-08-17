@@ -29,8 +29,20 @@ from sklearn.svm import SVC
 from textblob import TextBlob
 
 
-default_dataset_folder = os.path.abspath(
+company_dataset_folder = os.path.join(
+    os.path.expanduser("~"),
+    "Desktop",
+    "depression project",
+    "Dataset",
+    "Depression Dataset",
+)
+local_dataset_folder = os.path.abspath(
     os.path.join(repository_folder, "data", "raw")
+)
+default_dataset_folder = (
+    company_dataset_folder
+    if os.path.isdir(company_dataset_folder)
+    else local_dataset_folder
 )
 dataset_folder = os.environ.get(
     "EDAIC_RAW_DIR",
@@ -53,9 +65,9 @@ if os.path.isdir(local_nltk):
     nltk.data.path.insert(0, local_nltk)
 
 split_files = {
-    "train": "Train Split Data.csv",
-    "dev": "Dev Split Data.csv",
-    "test": "Test Split Data.csv",
+    "train": ["Train Split Data.csv", "train_split.csv"],
+    "dev": ["Dev Split Data.csv", "dev_split.csv"],
+    "test": ["Test Split Data.csv", "test_split.csv"],
 }
 
 generic_archive_ids = {
@@ -133,8 +145,24 @@ def average(values):
 def read_labels():
     labels = []
 
-    for split_name, file_name in split_files.items():
-        path = os.path.join(dataset_folder, file_name)
+    for split_name, file_names in split_files.items():
+        path = next(
+            (
+                os.path.join(dataset_folder, name)
+                for name in file_names
+                if os.path.isfile(os.path.join(dataset_folder, name))
+            ),
+            None,
+        )
+        if path is None:
+            raise FileNotFoundError(
+                "Could not find the "
+                + split_name
+                + " label file in "
+                + dataset_folder
+                + ". Tried: "
+                + ", ".join(file_names)
+            )
 
         with open(path, "r", encoding="utf-8-sig", newline="") as file:
             for row in csv.DictReader(file):

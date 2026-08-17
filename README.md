@@ -86,11 +86,32 @@ pip install -r requirements.txt
 ```
 
 The E-DAIC-WoZ corpus is released under a data use agreement and is **not**
-included in this repository. Request access from the corpus maintainers, then
-either place it under `data/raw/` or point the scripts at your copy:
+included in this repository. On the company device, the scripts automatically
+use this location when it exists:
+
+```text
+~/Desktop/depression project/Dataset/Depression Dataset
+```
+
+On another device, either place the dataset under `data/raw/` or point the
+scripts at your copy:
 
 ```bash
 export EDAIC_RAW_DIR=/path/to/e-daic-woz
+```
+
+`EDAIC_RAW_DIR` always overrides the automatic company-device path.
+
+Confirm the path before running the experiments:
+
+```bash
+python3 -c "from config import RAW_DIR; print(RAW_DIR)"
+```
+
+On the company device, the printed absolute path should end with:
+
+```text
+Desktop/depression project/Dataset/Depression Dataset
 ```
 
 See [`data/README.md`](data/README.md) for the expected layout.

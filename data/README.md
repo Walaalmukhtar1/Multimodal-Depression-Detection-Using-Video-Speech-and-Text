@@ -28,3 +28,9 @@ If the dataset lives elsewhere, point the scripts at it instead of copying:
 ```bash
 export EDAIC_RAW_DIR=/path/to/e-daic-woz     # Windows: set EDAIC_RAW_DIR=...
 ```
+
+On the company device, this location is detected automatically:
+
+```text
+~/Desktop/depression project/Dataset/Depression Dataset
+```

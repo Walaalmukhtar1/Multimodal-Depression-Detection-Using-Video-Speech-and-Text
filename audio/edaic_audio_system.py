@@ -21,8 +21,20 @@ from sklearn.svm import SVC
 
 project_folder = os.path.dirname(os.path.abspath(__file__))
 repository_folder = os.path.dirname(project_folder)
-default_dataset_folder = os.path.abspath(
+company_dataset_folder = os.path.join(
+    os.path.expanduser("~"),
+    "Desktop",
+    "depression project",
+    "Dataset",
+    "Depression Dataset",
+)
+local_dataset_folder = os.path.abspath(
     os.path.join(repository_folder, "data", "raw")
+)
+default_dataset_folder = (
+    company_dataset_folder
+    if os.path.isdir(company_dataset_folder)
+    else local_dataset_folder
 )
 dataset_folder = os.environ.get(
     "EDAIC_RAW_DIR",
