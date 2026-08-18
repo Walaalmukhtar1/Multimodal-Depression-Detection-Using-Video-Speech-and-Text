@@ -184,12 +184,16 @@ def find_archives(valid_ids):
         raise FileNotFoundError("Dataset folder not found: " + dataset_folder)
 
     for folder, _, names in os.walk(dataset_folder):
+        if "__MACOSX" in folder.split(os.sep):
+            continue
         for name in names:
+            if name.startswith("._"):
+                continue
             if not name.lower().endswith((".tar.gz", ".tgz", ".tar", ".gz")):
                 continue
             path = os.path.join(folder, name)
             participant_id = participant_id_in_archive(path, valid_ids)
-            if participant_id is not None:
+            if participant_id is not None and participant_id not in archives:
                 archives[participant_id] = path
 
     return archives
@@ -445,6 +449,22 @@ def run_model():
     )
 
 
+def feature_table_is_complete():
+    if not os.path.isfile(feature_file):
+        return False
+
+    try:
+        feature_ids = set(
+            pd.read_csv(feature_file, usecols=["Participant_ID"])[
+                "Participant_ID"
+            ].astype(int)
+        )
+        label_ids = {row["Participant_ID"] for row in read_labels()}
+        return label_ids.issubset(feature_ids)
+    except (OSError, KeyError, ValueError, pd.errors.ParserError):
+        return False
+
+
 def main():
     command = sys.argv[1].lower() if len(sys.argv) > 1 else "final"
     print("Dataset folder:", dataset_folder)
@@ -452,7 +472,8 @@ def main():
     if command == "extract":
         build_feature_table()
     elif command == "final":
-        if not os.path.isfile(feature_file):
+        if not feature_table_is_complete():
+            print("Rebuilding incomplete NLP feature table...", flush=True)
             build_feature_table()
         run_model()
     else:
