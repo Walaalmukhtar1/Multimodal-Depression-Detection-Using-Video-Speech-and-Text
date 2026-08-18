@@ -34,16 +34,8 @@ dataset_root = os.path.join(
 
 def find_dataset_folder():
     requested_folder = os.environ.get("EDAIC_RAW_DIR", dataset_root)
-    folders_to_check = [requested_folder, dataset_root]
-    train_names = {"Train Split Data.csv", "train_split.csv"}
-
-    for starting_folder in folders_to_check:
-        if not os.path.isdir(starting_folder):
-            continue
-        for current_folder, _, files in os.walk(starting_folder):
-            if train_names.intersection(files):
-                return current_folder
-
+    if os.path.isdir(dataset_root):
+        return dataset_root
     return requested_folder
 
 
@@ -111,28 +103,40 @@ def read_labels():
     labels = []
 
     for split_name, possible_names in split_files.items():
-        path = next(
-            (
-                os.path.join(dataset_folder, name)
-                for name in possible_names
-                if os.path.isfile(os.path.join(dataset_folder, name))
-            ),
-            None,
-        )
+        exact_names = {name.lower() for name in possible_names}
+        possible_paths = []
+
+        for folder, _, names in os.walk(dataset_folder):
+            for name in names:
+                lower_name = name.lower()
+                exact_match = lower_name in exact_names
+                loose_match = (
+                    lower_name.endswith(".csv")
+                    and split_name in lower_name
+                    and "split" in lower_name
+                )
+                if exact_match or loose_match:
+                    possible_paths.append(
+                        (0 if exact_match else 1, os.path.join(folder, name))
+                    )
+
+        path = min(possible_paths, default=(None, None))[1]
         if path is None:
             raise FileNotFoundError(
-                f"No {split_name} label file found in {dataset_folder}. "
-                f"Tried: {', '.join(possible_names)}"
+                f"No {split_name} label CSV was found anywhere inside "
+                f"{dataset_folder}."
             )
 
         with open(path, "r", encoding="utf-8-sig", newline="") as file:
             for row in csv.DictReader(file):
+                label = row.get("PHQ_Binary", row.get("PHQ8_Binary"))
+                score = row.get("PHQ_Score", row.get("PHQ8_Score"))
                 labels.append(
                     {
                         "Participant_ID": int(row["Participant_ID"]),
                         "split": split_name,
-                        "label": int(row["PHQ_Binary"]),
-                        "phq_score": int(row["PHQ_Score"]),
+                        "label": int(label),
+                        "phq_score": int(score),
                     }
                 )
 
@@ -178,13 +182,14 @@ def find_archives(valid_ids):
     if not os.path.isdir(dataset_folder):
         raise FileNotFoundError("Dataset folder not found: " + dataset_folder)
 
-    for name in os.listdir(dataset_folder):
-        if not name.lower().endswith((".tar.gz", ".tgz", ".tar", ".gz")):
-            continue
-        path = os.path.join(dataset_folder, name)
-        participant_id = participant_id_in_archive(path, valid_ids)
-        if participant_id is not None:
-            archives[participant_id] = path
+    for folder, _, names in os.walk(dataset_folder):
+        for name in names:
+            if not name.lower().endswith((".tar.gz", ".tgz", ".tar", ".gz")):
+                continue
+            path = os.path.join(folder, name)
+            participant_id = participant_id_in_archive(path, valid_ids)
+            if participant_id is not None:
+                archives[participant_id] = path
 
     return archives
 
