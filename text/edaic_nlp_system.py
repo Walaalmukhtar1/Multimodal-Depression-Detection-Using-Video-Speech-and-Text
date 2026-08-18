@@ -5,6 +5,7 @@ import re
 import sys
 import tarfile
 import unicodedata
+import zlib
 
 import nltk
 import numpy as np
@@ -170,7 +171,7 @@ def participant_id_in_archive(path, valid_ids):
                 match = re.fullmatch(r"(\d+)_Transcript\.csv", name, re.I)
                 if match and int(match.group(1)) in valid_ids:
                     return int(match.group(1))
-    except (tarfile.TarError, OSError):
+    except (tarfile.TarError, OSError, EOFError, zlib.error):
         return None
 
     return None
@@ -200,6 +201,7 @@ def extract_transcript(participant_id, archive_path):
         transcript_cache,
         f"{participant_id}_Transcript.csv",
     )
+    temporary_path = output_path + ".part"
     if os.path.isfile(output_path):
         return output_path
 
@@ -214,10 +216,21 @@ def extract_transcript(participant_id, archive_path):
                 source = archive.extractfile(member)
                 if source is None:
                     return None
-                with open(output_path, "wb") as output:
+                with open(temporary_path, "wb") as output:
                     output.write(source.read())
+                os.replace(temporary_path, output_path)
                 return output_path
-    except (tarfile.TarError, OSError):
+    except (tarfile.TarError, OSError, EOFError, zlib.error) as error:
+        if os.path.exists(temporary_path):
+            os.remove(temporary_path)
+        print(
+            "Skipped unreadable archive for participant",
+            participant_id,
+            "(" + os.path.basename(archive_path) + ")",
+            "-",
+            error,
+            flush=True,
+        )
         return None
 
     return None
