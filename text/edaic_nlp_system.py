@@ -6,12 +6,6 @@ import sys
 import tarfile
 import unicodedata
 
-project_folder = os.path.dirname(os.path.abspath(__file__))
-repository_folder = os.path.dirname(project_folder)
-local_packages = os.path.join(repository_folder, "packages")
-if os.path.isdir(local_packages):
-    sys.path.append(local_packages)
-
 import nltk
 import numpy as np
 import pandas as pd
@@ -29,26 +23,13 @@ from sklearn.svm import SVC
 from textblob import TextBlob
 
 
-company_dataset_folder = os.path.join(
-    os.path.expanduser("~"),
-    "Desktop",
-    "depression project",
-    "Dataset",
-    "Depression Dataset",
-)
-local_dataset_folder = os.path.abspath(
-    os.path.join(repository_folder, "data", "raw")
-)
-default_dataset_folder = (
-    company_dataset_folder
-    if os.path.isdir(company_dataset_folder)
-    else local_dataset_folder
-)
-dataset_folder = os.environ.get(
-    "EDAIC_RAW_DIR",
-    os.environ.get("EDAIC_DATASET_PATH", default_dataset_folder),
-)
-processed_folder = os.path.join(repository_folder, "data", "processed")
+repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, repo)
+from config import PROCESSED_DIR, RAW_DIR
+
+
+dataset_folder = str(RAW_DIR)
+processed_folder = str(PROCESSED_DIR)
 transcript_cache = os.path.join(processed_folder, "transcripts")
 feature_file = os.path.join(processed_folder, "edaic_nlp_features.csv")
 balanced_file = os.path.join(
@@ -60,7 +41,7 @@ evaluation_file = os.path.join(
     "edaic_nlp_balanced_loso_model_evaluation.csv",
 )
 
-local_nltk = os.path.join(repository_folder, "nltk_data")
+local_nltk = os.path.join(repo, "nltk_data")
 if os.path.isdir(local_nltk):
     nltk.data.path.insert(0, local_nltk)
 
@@ -68,31 +49,6 @@ split_files = {
     "train": ["Train Split Data.csv", "train_split.csv"],
     "dev": ["Dev Split Data.csv", "dev_split.csv"],
     "test": ["Test Split Data.csv", "test_split.csv"],
-}
-
-generic_archive_ids = {
-    "P Archive from USC.gz": 677,
-    "P Archive.tar (8).gz": 666,
-    "P Archive.tar (9).gz": 667,
-    "P Archive from USC (1).gz": 698,
-    "P.tar.gz": 634,
-    "P Archive.tar (12).gz": 695,
-    "P Archive.tar.gz": 632,
-    "P Archive.tar (13).gz": 696,
-    "P Archive.tar (11).gz": 691,
-    "P Archive.tar (10).gz": 669,
-    "P Archive.tar (14).gz": 712,
-    "P Archive.tar (15).gz": 717,
-    "P Archive.tar (7).gz": 659,
-    "P.tar (1).gz": 697,
-    "P Archive.tar (6).gz": 658,
-    "P Dataset.tar.gz": 687,
-    "P Archive.tar (4).gz": 656,
-    "P.tar (2).gz": 699,
-    "P Archive.tar (5).gz": 657,
-    "P Archive.tar (1).gz": 636,
-    "P Archive.tar (2).gz": 638,
-    "P Archive.tar (3).gz": 637,
 }
 
 feature_names = [
@@ -110,16 +66,8 @@ feature_names = [
 
 filler_words = {"uh", "um", "mm", "hmm", "erm", "ah"}
 first_person_words = {
-    "i",
-    "me",
-    "my",
-    "mine",
-    "myself",
-    "we",
-    "us",
-    "our",
-    "ours",
-    "ourselves",
+    "i", "me", "my", "mine", "myself",
+    "we", "us", "our", "ours", "ourselves",
 }
 
 
@@ -133,11 +81,6 @@ def clean_text(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def get_words(text):
-    text = clean_text(text)
-    return nltk.word_tokenize(text) if text else []
-
-
 def average(values):
     return sum(values) / len(values) if values else 0.0
 
@@ -145,23 +88,19 @@ def average(values):
 def read_labels():
     labels = []
 
-    for split_name, file_names in split_files.items():
+    for split_name, possible_names in split_files.items():
         path = next(
             (
                 os.path.join(dataset_folder, name)
-                for name in file_names
+                for name in possible_names
                 if os.path.isfile(os.path.join(dataset_folder, name))
             ),
             None,
         )
         if path is None:
             raise FileNotFoundError(
-                "Could not find the "
-                + split_name
-                + " label file in "
-                + dataset_folder
-                + ". Tried: "
-                + ", ".join(file_names)
+                f"No {split_name} label file found in {dataset_folder}. "
+                f"Tried: {', '.join(possible_names)}"
             )
 
         with open(path, "r", encoding="utf-8-sig", newline="") as file:
@@ -179,91 +118,96 @@ def read_labels():
 
 
 def find_transcripts():
-    files = {}
+    transcripts = {}
 
     for search_folder in [dataset_folder, transcript_cache]:
         if not os.path.isdir(search_folder):
             continue
-
         for folder, _, names in os.walk(search_folder):
             for name in names:
                 match = re.fullmatch(r"(\d+)_Transcript\.csv", name, re.I)
                 if match:
-                    files[int(match.group(1))] = os.path.join(folder, name)
+                    transcripts[int(match.group(1))] = os.path.join(folder, name)
 
-    return files
-
-
-def find_archives(valid_ids):
-    archive_map = {}
-
-    for name in os.listdir(dataset_folder):
-        if not name.lower().endswith((".gz", ".tgz")):
-            continue
-
-        path = os.path.join(dataset_folder, name)
-        participant_id = None
-
-        for value in re.findall(r"(?<!\d)(\d{3})(?!\d)", name):
-            if int(value) in valid_ids:
-                participant_id = int(value)
-                break
-
-        if participant_id is None:
-            participant_id = generic_archive_ids.get(name)
-
-        if participant_id in valid_ids:
-            archive_map[participant_id] = path
-
-    return archive_map
+    return transcripts
 
 
-def extract_transcript(participant_id, archive_path):
-    os.makedirs(transcript_cache, exist_ok=True)
-    output_path = os.path.join(
-        transcript_cache,
-        str(participant_id) + "_Transcript.csv",
-    )
-
-    if os.path.exists(output_path):
-        return output_path
-
-    wanted_name = str(participant_id) + "_Transcript.csv"
+def participant_id_in_archive(path, valid_ids):
+    for value in re.findall(r"(?<!\d)(\d{3})(?!\d)", os.path.basename(path)):
+        if int(value) in valid_ids:
+            return int(value)
 
     try:
-        with tarfile.open(archive_path, "r:*") as archive:
+        with tarfile.open(path, "r:*") as archive:
             for member in archive:
-                if member.isfile() and os.path.basename(member.name).lower() == wanted_name.lower():
-                    source = archive.extractfile(member)
-                    if source is None:
-                        return None
-                    with open(output_path, "wb") as output:
-                        output.write(source.read())
-                    return output_path
+                name = os.path.basename(member.name)
+                match = re.fullmatch(r"(\d+)_Transcript\.csv", name, re.I)
+                if match and int(match.group(1)) in valid_ids:
+                    return int(match.group(1))
     except (tarfile.TarError, OSError):
         return None
 
     return None
 
 
-def read_transcript(path):
-    with open(path, "r", encoding="utf-8-sig", newline="") as file:
-        return list(csv.DictReader(file))
+def find_archives(valid_ids):
+    archives = {}
+
+    if not os.path.isdir(dataset_folder):
+        raise FileNotFoundError("Dataset folder not found: " + dataset_folder)
+
+    for name in os.listdir(dataset_folder):
+        if not name.lower().endswith((".tar.gz", ".tgz", ".tar", ".gz")):
+            continue
+        path = os.path.join(dataset_folder, name)
+        participant_id = participant_id_in_archive(path, valid_ids)
+        if participant_id is not None:
+            archives[participant_id] = path
+
+    return archives
+
+
+def extract_transcript(participant_id, archive_path):
+    os.makedirs(transcript_cache, exist_ok=True)
+    output_path = os.path.join(
+        transcript_cache,
+        f"{participant_id}_Transcript.csv",
+    )
+    if os.path.isfile(output_path):
+        return output_path
+
+    wanted = f"{participant_id}_Transcript.csv".lower()
+    try:
+        with tarfile.open(archive_path, "r:*") as archive:
+            for member in archive:
+                if not member.isfile():
+                    continue
+                if os.path.basename(member.name).lower() != wanted:
+                    continue
+                source = archive.extractfile(member)
+                if source is None:
+                    return None
+                with open(output_path, "wb") as output:
+                    output.write(source.read())
+                return output_path
+    except (tarfile.TarError, OSError):
+        return None
+
+    return None
 
 
 def extract_features(rows):
     values = {name: [] for name in feature_names}
     english_stopwords = set(stopwords.words("english")) | filler_words
-    used_utterances = 0
+    utterance_count = 0
 
     for row in rows:
         text = clean_text(row.get("Text", ""))
-        words = get_words(text)
-
+        words = nltk.word_tokenize(text) if text else []
         if not words:
             continue
 
-        used_utterances += 1
+        utterance_count += 1
         word_count = len(words)
         values["avg_sentiment"].append(TextBlob(text).sentiment.polarity)
         values["avg_unique_frequency"].append(len(set(words)) / word_count)
@@ -301,7 +245,7 @@ def extract_features(rows):
         )
 
     features = {name: average(values[name]) for name in feature_names}
-    features["utterance_count"] = used_utterances
+    features["utterance_count"] = utterance_count
     return features
 
 
@@ -309,36 +253,39 @@ def build_feature_table():
     os.makedirs(processed_folder, exist_ok=True)
     labels = read_labels()
     valid_ids = {row["Participant_ID"] for row in labels}
-    transcript_files = find_transcripts()
-    archive_map = find_archives(valid_ids)
+    transcripts = find_transcripts()
+    archives = find_archives(valid_ids)
     records = []
     missing_ids = []
 
     for index, label_row in enumerate(labels, start=1):
         participant_id = label_row["Participant_ID"]
-        transcript_path = transcript_files.get(participant_id)
+        transcript_path = transcripts.get(participant_id)
 
-        if transcript_path is None and participant_id in archive_map:
+        if transcript_path is None and participant_id in archives:
             transcript_path = extract_transcript(
                 participant_id,
-                archive_map[participant_id],
+                archives[participant_id],
             )
-
         if transcript_path is None:
             missing_ids.append(participant_id)
             continue
 
+        with open(
+            transcript_path,
+            "r",
+            encoding="utf-8-sig",
+            newline="",
+        ) as file:
+            rows = list(csv.DictReader(file))
+
         record = dict(label_row)
-        record.update(extract_features(read_transcript(transcript_path)))
+        record.update(extract_features(rows))
         records.append(record)
         print("Processed", index, "of", len(labels), participant_id, flush=True)
 
     columns = [
-        "Participant_ID",
-        "split",
-        "label",
-        "phq_score",
-        "utterance_count",
+        "Participant_ID", "split", "label", "phq_score", "utterance_count"
     ] + feature_names
     pd.DataFrame(records)[columns].to_csv(feature_file, index=False)
     print("Feature rows:", len(records), flush=True)
@@ -358,40 +305,35 @@ def make_balanced_data():
     if len(depressed_ids) != 66:
         raise ValueError("Expected 66 depressed participants")
 
-    random_generator = random.Random(42)
-    selected_non_depressed = random_generator.sample(non_depressed_ids, 66)
+    selected_non_depressed = random.Random(42).sample(non_depressed_ids, 66)
     selected_ids = sorted(depressed_ids + selected_non_depressed)
     feature_lookup = features.set_index("Participant_ID")
-    missing = [value for value in selected_ids if value not in feature_lookup.index]
-
+    missing = [pid for pid in selected_ids if pid not in feature_lookup.index]
     if missing:
         raise ValueError("Missing NLP features for participants: " + str(missing))
 
     balanced = feature_lookup.loc[selected_ids]
-    x_values = balanced[feature_names].to_numpy(dtype=float)
-    y_values = balanced["label"].to_numpy(dtype=int)
-    return np.asarray(selected_ids), x_values, y_values
+    return (
+        np.asarray(selected_ids),
+        balanced[feature_names].to_numpy(dtype=float),
+        balanced["label"].to_numpy(dtype=int),
+    )
 
 
-def get_scores(y_values, predictions):
-    matrix = confusion_matrix(y_values, predictions, labels=[0, 1])
+def calculate_scores(labels, predictions):
+    matrix = confusion_matrix(labels, predictions, labels=[0, 1])
     return {
-        "accuracy": accuracy_score(y_values, predictions),
-        "precision": precision_score(
-            y_values, predictions, pos_label=1, zero_division=0
-        ),
-        "recall": recall_score(
-            y_values, predictions, pos_label=1, zero_division=0
-        ),
-        "depressed_f1": f1_score(
-            y_values, predictions, pos_label=1, zero_division=0
-        ),
+        "accuracy": accuracy_score(labels, predictions),
+        "precision": precision_score(labels, predictions, zero_division=0),
+        "recall": recall_score(labels, predictions, zero_division=0),
+        "depressed_f1": f1_score(labels, predictions, zero_division=0),
         "non_depressed_f1": f1_score(
-            y_values, predictions, pos_label=0, zero_division=0
+            labels,
+            predictions,
+            pos_label=0,
+            zero_division=0,
         ),
-        "macro_f1": f1_score(
-            y_values, predictions, average="macro", zero_division=0
-        ),
+        "macro_f1": f1_score(labels, predictions, average="macro"),
         "tn": int(matrix[0, 0]),
         "fp": int(matrix[0, 1]),
         "fn": int(matrix[1, 0]),
@@ -399,44 +341,42 @@ def get_scores(y_values, predictions):
     }
 
 
-def run_final_model():
-    os.makedirs(processed_folder, exist_ok=True)
-    participant_ids, x_values, y_values = make_balanced_data()
+def run_model():
+    participant_ids, features, labels = make_balanced_data()
     predictions = []
     decision_scores = []
 
-    for test_index in range(len(y_values)):
-        training_mask = np.ones(len(y_values), dtype=bool)
-        training_mask[test_index] = False
+    for test_index in range(len(labels)):
+        train = np.ones(len(labels), dtype=bool)
+        train[test_index] = False
         model = make_pipeline(
             StandardScaler(),
-            SVC(kernel="linear", C=0.01, gamma="scale"),
+            SVC(kernel="linear", C=0.01),
         )
-        model.fit(x_values[training_mask], y_values[training_mask])
-        x_test = x_values[test_index].reshape(1, -1)
-        predictions.append(int(model.predict(x_test)[0]))
-        decision_scores.append(float(model.decision_function(x_test)[0]))
+        model.fit(features[train], labels[train])
+        test_row = features[test_index].reshape(1, -1)
+        predictions.append(int(model.predict(test_row)[0]))
+        decision_scores.append(float(model.decision_function(test_row)[0]))
 
-    predictions = np.asarray(predictions, dtype=int)
-    scores = get_scores(y_values, predictions)
+    predictions = np.asarray(predictions)
+    scores = calculate_scores(labels, predictions)
     prediction_table = pd.DataFrame(
         {
             "Participant_ID": participant_ids,
-            "actual_label": y_values,
+            "actual_label": labels,
             "predicted_label": predictions,
             "decision_score": decision_scores,
         }
     )
-
     for name, value in scores.items():
         prediction_table["overall_" + name] = value
-
     prediction_table.to_csv(balanced_file, index=False)
+
     pd.DataFrame(
         [
             {
                 "Model": "Linear SVM",
-                "Participants": len(y_values),
+                "Participants": len(labels),
                 "Features": len(feature_names),
                 "C": 0.01,
                 "Accuracy": scores["accuracy"],
@@ -453,30 +393,30 @@ def run_final_model():
         ]
     ).to_csv(evaluation_file, index=False)
 
-    print("\nTranscript Linear SVM - balanced LOSO", flush=True)
-    print("Participants: 132 (66 non-depressed, 66 depressed)", flush=True)
-    print("Accuracy:", round(scores["accuracy"] * 100, 2), "%", flush=True)
-    print("Depressed F1:", round(scores["depressed_f1"], 3), flush=True)
-    print("Non-depressed F1:", round(scores["non_depressed_f1"], 3), flush=True)
-    print("Macro F1:", round(scores["macro_f1"], 3), flush=True)
+    print("\nTranscript Linear SVM - balanced LOSO")
+    print("Participants: 132 (66 non-depressed, 66 depressed)")
+    print("Accuracy:", round(scores["accuracy"] * 100, 2), "%")
+    print("Depressed F1:", round(scores["depressed_f1"], 3))
+    print("Non-depressed F1:", round(scores["non_depressed_f1"], 3))
+    print("Macro F1:", round(scores["macro_f1"], 3))
     print(
         "Confusion matrix:",
         [[scores["tn"], scores["fp"]], [scores["fn"], scores["tp"]]],
-        flush=True,
     )
 
 
 def main():
     command = sys.argv[1].lower() if len(sys.argv) > 1 else "final"
+    print("Dataset folder:", dataset_folder)
 
     if command == "extract":
         build_feature_table()
     elif command == "final":
-        if not os.path.exists(feature_file):
+        if not os.path.isfile(feature_file):
             build_feature_table()
-        run_final_model()
+        run_model()
     else:
-        print("Use: final or extract", flush=True)
+        print("Use: final or extract")
 
 
 if __name__ == "__main__":
