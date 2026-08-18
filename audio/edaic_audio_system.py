@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import tarfile
+import zlib
 
 import numpy as np
 import pandas as pd
@@ -102,6 +103,18 @@ def read_participants():
     balanced = pd.read_csv(balanced_file)[
         ["Participant_ID", "actual_label"]
     ]
+    balanced["Participant_ID"] = pd.to_numeric(
+        balanced["Participant_ID"], errors="raise"
+    ).astype(int)
+    balanced["actual_label"] = pd.to_numeric(
+        balanced["actual_label"], errors="raise"
+    ).astype(int)
+    features["Participant_ID"] = pd.to_numeric(
+        features["Participant_ID"], errors="raise"
+    ).astype(int)
+    features["label"] = pd.to_numeric(
+        features["label"], errors="raise"
+    ).astype(int)
     data = balanced.merge(
         features[["Participant_ID", "split", "label", "phq_score"]],
         on="Participant_ID",
@@ -109,7 +122,12 @@ def read_participants():
         validate="one_to_one",
     )
 
-    if len(data) != 132 or data.isna().any().any():
+    if (
+        len(data) != 132
+        or data["Participant_ID"].nunique() != 132
+        or data.isna().any().any()
+        or data["actual_label"].value_counts().to_dict() != {0: 66, 1: 66}
+    ):
         raise ValueError("The shared balanced split must contain 132 participants")
 
     if not np.array_equal(data["actual_label"], data["label"]):
@@ -160,21 +178,29 @@ def find_archives(valid_ids):
         if not os.path.isdir(search_folder):
             continue
 
-        for name in os.listdir(search_folder):
-            if not name.lower().endswith((".gz", ".tgz")):
+        for folder, _, names in os.walk(search_folder):
+            if "__MACOSX" in folder.split(os.sep):
                 continue
 
-            participant_id = None
-            for value in re.findall(r"(?<!\d)(\d{3})(?!\d)", name):
-                if int(value) in valid_ids:
-                    participant_id = int(value)
-                    break
+            for name in names:
+                if name.startswith("._"):
+                    continue
+                if not name.lower().endswith(
+                    (".tar.gz", ".tgz", ".tar", ".gz")
+                ):
+                    continue
 
-            if participant_id is None:
-                participant_id = generic_archive_ids.get(name)
+                participant_id = None
+                for value in re.findall(r"(?<!\d)(\d{3})(?!\d)", name):
+                    if int(value) in valid_ids:
+                        participant_id = int(value)
+                        break
 
-            if participant_id in valid_ids:
-                archive_map[participant_id] = os.path.join(search_folder, name)
+                if participant_id is None:
+                    participant_id = generic_archive_ids.get(name)
+
+                if participant_id in valid_ids and participant_id not in archive_map:
+                    archive_map[participant_id] = os.path.join(folder, name)
 
     return archive_map
 
@@ -203,7 +229,13 @@ def read_egemaps_archive(participant_id, archive_path):
                         sep=";",
                         low_memory=False,
                     )
-    except (tarfile.TarError, OSError, pd.errors.ParserError):
+    except (
+        tarfile.TarError,
+        OSError,
+        EOFError,
+        zlib.error,
+        pd.errors.ParserError,
+    ):
         return None
 
     return None
@@ -305,9 +337,24 @@ def build_statistics():
     completed_ids = set()
 
     if os.path.exists(checkpoint_file):
-        records = pd.read_csv(checkpoint_file).to_dict("records")
-        completed_ids = {int(row["Participant_ID"]) for row in records}
-        print("Resuming after", len(completed_ids), "participants", flush=True)
+        try:
+            checkpoint = pd.read_csv(checkpoint_file)
+            checkpoint["Participant_ID"] = pd.to_numeric(
+                checkpoint["Participant_ID"], errors="raise"
+            ).astype(int)
+            checkpoint = checkpoint[
+                checkpoint["Participant_ID"].isin(valid_ids)
+            ].drop_duplicates("Participant_ID", keep="last")
+            records = checkpoint.to_dict("records")
+            completed_ids = {int(row["Participant_ID"]) for row in records}
+            print(
+                "Resuming after",
+                len(completed_ids),
+                "participants",
+                flush=True,
+            )
+        except (OSError, KeyError, ValueError, pd.errors.ParserError):
+            print("Ignoring an incompatible old audio checkpoint", flush=True)
 
     for index, participant in enumerate(participants, start=1):
         participant_id = int(participant["Participant_ID"])
@@ -535,6 +582,8 @@ def run_final_model():
     print("\neGeMAPS Linear SVM - balanced LOSO", flush=True)
     print("Participants: 132 (66 non-depressed, 66 depressed)", flush=True)
     print("Accuracy:", round(scores["accuracy"] * 100, 2), "%", flush=True)
+    print("Depressed recall:", round(scores["recall"], 3), flush=True)
+    print("Depressed precision:", round(scores["precision"], 3), flush=True)
     print("Depressed F1:", round(scores["depressed_f1"], 3), flush=True)
     print("Non-depressed F1:", round(scores["non_depressed_f1"], 3), flush=True)
     print("Macro F1:", round(scores["macro_f1"], 3), flush=True)
@@ -545,13 +594,43 @@ def run_final_model():
     )
 
 
+def statistics_table_is_complete():
+    if not os.path.exists(statistics_file):
+        return False
+
+    try:
+        required_ids = {
+            int(row["Participant_ID"]) for row in read_participants()
+        }
+        statistics = pd.read_csv(statistics_file)
+        available_ids = set(statistics["Participant_ID"].astype(int))
+        feature_columns = [
+            column for column in statistics.columns
+            if column.startswith("egemaps_")
+            and not column.endswith("speech_frame_count")
+        ]
+        return required_ids.issubset(available_ids) and len(feature_columns) >= 50
+    except (OSError, KeyError, ValueError, pd.errors.ParserError):
+        return False
+
+
 def main():
     command = sys.argv[1].lower() if len(sys.argv) > 1 else "final"
+    print("Dataset folder:", dataset_folder, flush=True)
+
+    if not os.path.exists(nlp_feature_file) or not os.path.exists(balanced_file):
+        raise FileNotFoundError(
+            "Run Text/edaic_nlp_system.py successfully before the audio model."
+        )
 
     if command == "extract":
         build_statistics()
     elif command == "final":
-        if not os.path.exists(statistics_file):
+        if not statistics_table_is_complete():
+            print(
+                "Building audio statistics for the current 132-person split...",
+                flush=True,
+            )
             build_statistics()
         run_final_model()
     else:
