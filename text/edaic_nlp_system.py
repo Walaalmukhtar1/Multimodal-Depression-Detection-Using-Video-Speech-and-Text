@@ -85,6 +85,9 @@ first_person_words = {
     "we", "us", "our", "ours", "ourselves",
 }
 
+# Participant 459 has audio but no transcript in the official E-DAIC archive.
+text_excluded_ids = {459}
+
 
 def clean_text(text):
     text = str(text).lower()
@@ -339,11 +342,24 @@ def build_feature_table():
 def make_balanced_data():
     features = pd.read_csv(feature_file)
     labels = read_labels()
+    available_ids = set(features["Participant_ID"].astype(int))
+    required_ids = {
+        row["Participant_ID"] for row in labels
+        if row["Participant_ID"] not in text_excluded_ids
+    }
+    unavailable_ids = sorted(required_ids - available_ids)
+    if unavailable_ids:
+        raise ValueError(
+            "Missing NLP features for participants: " + str(unavailable_ids)
+        )
+
     depressed_ids = [
-        row["Participant_ID"] for row in labels if row["label"] == 1
+        row["Participant_ID"] for row in labels
+        if row["label"] == 1 and row["Participant_ID"] in available_ids
     ]
     non_depressed_ids = [
-        row["Participant_ID"] for row in labels if row["label"] == 0
+        row["Participant_ID"] for row in labels
+        if row["label"] == 0 and row["Participant_ID"] in available_ids
     ]
 
     if len(depressed_ids) != 66:
@@ -352,9 +368,6 @@ def make_balanced_data():
     selected_non_depressed = random.Random(42).sample(non_depressed_ids, 66)
     selected_ids = sorted(depressed_ids + selected_non_depressed)
     feature_lookup = features.set_index("Participant_ID")
-    missing = [pid for pid in selected_ids if pid not in feature_lookup.index]
-    if missing:
-        raise ValueError("Missing NLP features for participants: " + str(missing))
 
     balanced = feature_lookup.loc[selected_ids]
     return (
@@ -459,7 +472,10 @@ def feature_table_is_complete():
                 "Participant_ID"
             ].astype(int)
         )
-        label_ids = {row["Participant_ID"] for row in read_labels()}
+        label_ids = {
+            row["Participant_ID"] for row in read_labels()
+            if row["Participant_ID"] not in text_excluded_ids
+        }
         return label_ids.issubset(feature_ids)
     except (OSError, KeyError, ValueError, pd.errors.ParserError):
         return False
@@ -468,6 +484,7 @@ def feature_table_is_complete():
 def main():
     command = sys.argv[1].lower() if len(sys.argv) > 1 else "final"
     print("Dataset folder:", dataset_folder)
+    print("Text-only exclusion (no transcript in archive): [459]")
 
     if command == "extract":
         build_feature_table()
