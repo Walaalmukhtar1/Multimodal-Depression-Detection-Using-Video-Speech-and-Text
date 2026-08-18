@@ -24,14 +24,30 @@ from textblob import TextBlob
 
 
 repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-company_dataset = os.path.join(
+dataset_root = os.path.join(
     os.path.expanduser("~"),
     "Desktop",
     "depression project",
     "Dataset",
-    "Depression Dataset",
 )
-dataset_folder = os.environ.get("EDAIC_RAW_DIR", company_dataset)
+
+
+def find_dataset_folder():
+    requested_folder = os.environ.get("EDAIC_RAW_DIR", dataset_root)
+    folders_to_check = [requested_folder, dataset_root]
+    train_names = {"Train Split Data.csv", "train_split.csv"}
+
+    for starting_folder in folders_to_check:
+        if not os.path.isdir(starting_folder):
+            continue
+        for current_folder, _, files in os.walk(starting_folder):
+            if train_names.intersection(files):
+                return current_folder
+
+    return requested_folder
+
+
+dataset_folder = find_dataset_folder()
 processed_folder = os.environ.get(
     "EDAIC_PROCESSED_DIR",
     os.path.join(repo, "data", "processed"),
