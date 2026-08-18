@@ -24,12 +24,18 @@ from textblob import TextBlob
 
 
 repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, repo)
-from config import PROCESSED_DIR, RAW_DIR
-
-
-dataset_folder = str(RAW_DIR)
-processed_folder = str(PROCESSED_DIR)
+company_dataset = os.path.join(
+    os.path.expanduser("~"),
+    "Desktop",
+    "depression project",
+    "Dataset",
+    "Depression Dataset",
+)
+dataset_folder = os.environ.get("EDAIC_RAW_DIR", company_dataset)
+processed_folder = os.environ.get(
+    "EDAIC_PROCESSED_DIR",
+    os.path.join(repo, "data", "processed"),
+)
 transcript_cache = os.path.join(processed_folder, "transcripts")
 feature_file = os.path.join(processed_folder, "edaic_nlp_features.csv")
 balanced_file = os.path.join(
