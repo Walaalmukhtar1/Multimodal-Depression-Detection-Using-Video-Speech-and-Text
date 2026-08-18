@@ -357,15 +357,44 @@ def make_balanced_data():
         row["Participant_ID"] for row in labels
         if row["label"] == 1 and row["Participant_ID"] in available_ids
     ]
-    non_depressed_ids = [
+    all_non_depressed_ids = [
         row["Participant_ID"] for row in labels
-        if row["label"] == 0 and row["Participant_ID"] in available_ids
+        if row["label"] == 0
     ]
 
     if len(depressed_ids) != 66:
         raise ValueError("Expected 66 depressed participants")
 
-    selected_non_depressed = random.Random(42).sample(non_depressed_ids, 66)
+    random_generator = random.Random(42)
+    original_non_depressed = random_generator.sample(
+        all_non_depressed_ids,
+        66,
+    )
+    selected_non_depressed = [
+        participant_id for participant_id in original_non_depressed
+        if participant_id in available_ids
+    ]
+    unavailable_selected = [
+        participant_id for participant_id in original_non_depressed
+        if participant_id not in available_ids
+    ]
+    replacement_pool = [
+        participant_id for participant_id in all_non_depressed_ids
+        if participant_id in available_ids
+        and participant_id not in selected_non_depressed
+    ]
+    replacements = random_generator.sample(
+        replacement_pool,
+        len(unavailable_selected),
+    )
+    selected_non_depressed.extend(replacements)
+
+    if unavailable_selected:
+        print(
+            "Non-depressed split replacements:",
+            dict(zip(unavailable_selected, replacements)),
+        )
+
     selected_ids = sorted(depressed_ids + selected_non_depressed)
     feature_lookup = features.set_index("Participant_ID")
 
