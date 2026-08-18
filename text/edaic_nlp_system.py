@@ -23,7 +23,8 @@ from sklearn.svm import SVC
 from textblob import TextBlob
 
 
-repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+text_folder = os.path.dirname(os.path.abspath(__file__))
+repo = os.path.dirname(text_folder)
 dataset_root = os.path.join(
     os.path.expanduser("~"),
     "Desktop",
@@ -55,9 +56,12 @@ evaluation_file = os.path.join(
     "edaic_nlp_balanced_loso_model_evaluation.csv",
 )
 
-local_nltk = os.path.join(repo, "nltk_data")
-if os.path.isdir(local_nltk):
-    nltk.data.path.insert(0, local_nltk)
+for local_nltk in (
+    os.path.join(text_folder, "nltk_data"),
+    os.path.join(repo, "nltk_data"),
+):
+    if os.path.isdir(local_nltk):
+        nltk.data.path.insert(0, local_nltk)
 
 split_files = {
     "train": ["Train Split Data.csv", "train_split.csv"],
